@@ -11,31 +11,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout codice
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pdo, pdo_sqlite, redis
-          coverage: none
+          extensions: pdo, pdo_sqlite
 
-      - name: Installa dipendenze
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-      - name: Copia .env
-        run: cp .env.example .env
+      - run: composer install --no-interaction --prefer-dist
 
-      - name: Genera app key
-        run: php artisan key:generate
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: cp .env.example .env
+
+      - run: php artisan key:generate
 
       - name: Lancia i test
-        run:  php artisan test
+        run: php artisan test
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: ":memory:"
-          QUEUE_CONNECTION: sync
           CACHE_STORE: array
           SESSION_DRIVER: array
-          MAIL_MAILER: log
+          QUEUE_CONNECTION: sync
