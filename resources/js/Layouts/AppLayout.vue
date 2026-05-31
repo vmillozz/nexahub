@@ -16,7 +16,10 @@
               Task
             </Link>
             <span class="text-sm font-medium text-gray-800">
-              {{ page.props.auth?.user?.name }}
+              {{ page.props.auth?.user?.name }}<button @click="router.post('/logout')"
+                class="text-sm text-gray-400 hover:text-gray-600">
+                Esci
+              </button>
             </span>
           </div>
 

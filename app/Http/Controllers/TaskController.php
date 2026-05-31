@@ -30,7 +30,7 @@ class TaskController extends Controller
 
     public function store(Request $request)
     {
-        $team = Team::first();
+        $team = auth()->user()->teams()->firstOrFail();
 
         $data = $request->validate([
             'title'       => 'required|string|max:255',
