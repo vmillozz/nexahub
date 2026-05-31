@@ -1,84 +1,70 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Task;
-use App\Models\Team;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use App\Jobs\SendTaskNotification;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class TaskController extends Controller
 {
-    public function index(Request $request, Team $team): JsonResponse
+    public function index(Request $request): Response
     {
+        $team = auth()->user()->teams()->with('members:id,name,email')->firstOrFail();
+
         $tasks = $team->tasks()
             ->with('assignee:id,name,email')
-            ->when($request->status, fn($q, $s) => $q->where('status', $s))
+            ->when($request->status,   fn($q, $s) => $q->where('status', $s))
             ->when($request->priority, fn($q, $p) => $q->where('priority', $p))
             ->orderBy('due_at')
-            ->paginate(20);
+            ->get();
 
-        return response()->json($tasks);
+        return Inertia::render('Tasks/Index', [
+            'tasks'   => $tasks,
+            'members' => $team->members,
+            'filters' => $request->only(['status', 'priority']),
+        ]);
     }
 
-    public function store(Request $request, Team $team): JsonResponse
+    public function store(Request $request)
     {
-        $data = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'priority' => 'in:low,medium,high',
-            'assigned_to' => 'nullable|exists:users,id',
-            'due_at' => 'nullable|date|after:now',
-        ]);
-
-        $task = $team->tasks()->create([
-            ...$data,
-            'created_by' => $request->user()->id,
-        ]);
-        $task = $team->tasks()->create([
-            ...$data,
-            'created_by' => $request->user()->id,
-        ]);
-
-        if ($task->assigned_to) {
-            SendTaskNotification::dispatch($task->load('assignee'));
-        }
-        return response()->json($task->load('assignee:id,name,email'), 201);
-    }
-
-    public function show(Team $team, Task $task): JsonResponse
-    {
-        abort_if($task->team_id !== $team->id, 404);
-
-        return response()->json($task->load('assignee:id,name,email', 'creator:id,name,email'));
-    }
-
-    public function update(Request $request, Team $team, Task $task): JsonResponse
-    {
-        abort_if($task->team_id !== $team->id, 404);
+        $team = auth()->user()->teams()->firstOrFail();
 
         $data = $request->validate([
-            'title' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'status' => 'sometimes|in:todo,in_progress,done',
-            'priority' => 'sometimes|in:low,medium,high',
+            'title'       => 'required|string|max:255',
+            'priority'    => 'in:low,medium,high',
             'assigned_to' => 'nullable|exists:users,id',
-            'due_at' => 'nullable|date',
+            'due_at'      => 'nullable|date',
+        ]);
+
+        $team->tasks()->create([
+            ...$data,
+            'created_by' => auth()->id(),
+        ]);
+
+        return redirect()->back();
+    }
+
+    public function update(Request $request, Task $task)
+    {
+        $this->authorize('update', $task);
+
+        $data = $request->validate([
+            'status' => 'required|in:todo,in_progress,done',
         ]);
 
         $task->update($data);
 
-        return response()->json($task->fresh('assignee:id,name,email'));
+        return redirect()->back();
     }
 
-    public function destroy(Team $team, Task $task): JsonResponse
+    public function destroy(Task $task)
     {
-        abort_if($task->team_id !== $team->id, 404);
+        $this->authorize('delete', $task);
 
         $task->delete();
 
-        return response()->json(null, 204);
+        return redirect()->back();
     }
 }
